@@ -24,14 +24,27 @@ Single-agent analysis produces generic results. Multiple agents with the same pr
 
 ## Usage
 
+### Basic Usage (Joint Responses)
 ```bash
 ./council.sh 4 "Review the authentication module for security issues"
 ```
 
 - Spawns 4 Claude instances in parallel
 - Each gets a random constraint from the pool
-- Results aggregated into one report
+- Results shown side-by-side for you to synthesize
 - Takes 2-5 minutes depending on codebase size
+
+### With Synthesis (Consolidated Recommendations)
+```bash
+COUNCIL_SYNTHESIZE=1 ./council.sh 4 "Review the authentication module"
+```
+
+- Same as above, PLUS a 5th agent that:
+  - Reads all council member analyses
+  - Identifies common themes and unique insights
+  - Resolves conflicting recommendations
+  - Creates prioritized action plan with implementation roadmap
+  - Adds ~30-120 seconds extra time
 
 ## Features
 
@@ -70,12 +83,37 @@ Member #4: ERRORS_DIJKSTRA
 "What happens when the API returns 429? No retry logic found"
 ```
 
+## Which Approach to Use?
+
+The council evaluated this question itself and reached different conclusions based on constraints:
+
+**Use Joint Responses (default) when:**
+- You understand your codebase context and can prioritize yourself
+- You want to see the raw trade-offs between different perspectives
+- You want to learn constraint-thinking mental models
+- Precision at file:line level matters
+- Cost/time optimization is important
+
+**Use Synthesis (COUNCIL_SYNTHESIZE=1) when:**
+- You want one clear path forward immediately
+- Multiple conflicting recommendations need arbitration
+- You prefer lower cognitive load over raw insights
+- Action sequencing and dependency analysis would help
+- The extra 30-120 seconds and API cost is acceptable
+
+**The council's verdict:**
+- `waste_ohno`: "Synthesis is waste - adds unnecessary processing"
+- `complexity_knuth`: "Synthesis reduces cognitive load from O(N·K) to O(S)"
+
+The disagreement itself proves the constraint system works! Try both and see what works for your workflow.
+
 ## Development History
 
 Built through iterative council self-analysis:
 - **Iteration 0**: Generic prompts → 70% overlap
 - **Iteration 1**: Persona-only (think like Musk/Einstein) → Still 60-70% overlap
 - **Iteration 2**: Hybrid constraint+persona → 20-30% overlap ✅
+- **Iteration 3**: Added optional synthesis agent (council debated its value!)
 
 ## License
 
