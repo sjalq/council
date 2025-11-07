@@ -455,5 +455,93 @@ echo "                       END OF REPORT"
 echo "═══════════════════════════════════════════════════════════════"
 echo ""
 
+# Optional synthesis step (enabled via --synthesize flag or COUNCIL_SYNTHESIZE=1)
+if [ "${COUNCIL_SYNTHESIZE:-0}" -eq 1 ]; then
+    echo ""
+    echo "═══════════════════════════════════════════════════════════════"
+    echo "                    SYNTHESIS & RECOMMENDATIONS"
+    echo "═══════════════════════════════════════════════════════════════"
+    echo ""
+
+    info "Synthesizing insights from all $NUM_CLAUDES council members..."
+    echo ""
+
+    # Collect all member outputs
+    ALL_ANALYSES=""
+    for i in $(seq 1 $NUM_CLAUDES); do
+        OUTPUT_FILE="$OUTPUT_DIR/member_$i.txt"
+        CONSTRAINT="${ASSIGNED_CONSTRAINTS[$((i-1))]}"
+        if [ -f "$OUTPUT_FILE" ]; then
+            ALL_ANALYSES="$ALL_ANALYSES
+
+═══════════════════════════════════════════════════════════════
+MEMBER #$i: ${CONSTRAINT^^}
+═══════════════════════════════════════════════════════════════
+
+$(cat "$OUTPUT_FILE")
+"
+        fi
+    done
+
+    # Create synthesis prompt
+    SYNTHESIS_PROMPT="You are a master synthesizer analyzing insights from $NUM_CLAUDES council members who each analyzed through different constraints.
+
+YOUR TASK:
+Synthesize the following analyses into ONE coherent, actionable recommendation.
+
+ORIGINAL TASK:
+$TASK
+
+COUNCIL ANALYSES:
+$ALL_ANALYSES
+
+YOUR SYNTHESIS REQUIREMENTS:
+
+1. EXECUTIVE SUMMARY (3-4 sentences)
+   - What's the core issue?
+   - What's the recommended solution?
+   - What's the expected impact?
+
+2. CONSOLIDATED FINDINGS
+   - Identify common themes across multiple constraints
+   - Highlight unique insights from specific constraints
+   - Resolve any conflicting recommendations (explain which to prioritize and why)
+
+3. PRIORITIZED ACTION PLAN
+   - List specific changes in priority order (P0/P1/P2)
+   - For each item: file:line, what to change, why, expected impact
+   - Include concrete code snippets where applicable
+
+4. RISKS & TRADE-OFFS
+   - What are we trading off?
+   - What could go wrong?
+   - How to mitigate?
+
+5. IMPLEMENTATION ROADMAP
+   - What order to tackle changes?
+   - What dependencies exist?
+   - Estimated effort (hours/days)?
+
+Be concise but specific. The goal is ONE clear path forward, not multiple options.
+Focus on ACTIONABLE recommendations with clear next steps.
+
+Begin your synthesis now."
+
+    # Run synthesis
+    SYNTHESIS_OUTPUT=$(claude \
+        -p "$SYNTHESIS_PROMPT" \
+        --model "claude-sonnet-4-5-20250929" \
+        --dangerously-skip-permissions \
+        --output-format "text" \
+        2>&1)
+
+    echo "$SYNTHESIS_OUTPUT"
+    echo ""
+    echo "═══════════════════════════════════════════════════════════════"
+    echo "                    END OF SYNTHESIS"
+    echo "═══════════════════════════════════════════════════════════════"
+    echo ""
+fi
+
 # Clean up temp files now that we're done
 rm -rf "$TEMP_DIR" 2>/dev/null || true
