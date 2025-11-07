@@ -419,41 +419,55 @@ echo -e "${GREEN}                  GENERATING AGGREGATE REPORT${NC}"
 echo -e "${GREEN}═══════════════════════════════════════════════════════════════${NC}"
 echo ""
 
-# Generate and output aggregate report directly to stdout
-echo ""
-echo "═══════════════════════════════════════════════════════════════"
-echo "                    COUNCIL ANALYSIS REPORT"
-echo "═══════════════════════════════════════════════════════════════"
-echo ""
-echo "Task: $TASK"
-echo "Working Directory: $WORK_DIR"
-echo "Council Members: $NUM_CLAUDES"
-echo "Timestamp: $(date '+%Y-%m-%d %H:%M:%S')"
-echo ""
-echo "═══════════════════════════════════════════════════════════════"
-echo ""
+# Generate and output aggregate report
+# If synthesis enabled, skip individual reports and only show synthesis
+# If synthesis disabled, show all individual reports
+if [ "${COUNCIL_SYNTHESIZE:-0}" -eq 0 ]; then
+    echo ""
+    echo "═══════════════════════════════════════════════════════════════"
+    echo "                    COUNCIL ANALYSIS REPORT"
+    echo "═══════════════════════════════════════════════════════════════"
+    echo ""
+    echo "Task: $TASK"
+    echo "Working Directory: $WORK_DIR"
+    echo "Council Members: $NUM_CLAUDES"
+    echo "Timestamp: $(date '+%Y-%m-%d %H:%M:%S')"
+    echo ""
+    echo "═══════════════════════════════════════════════════════════════"
+    echo ""
 
-for i in $(seq 1 $NUM_CLAUDES); do
-    OUTPUT_FILE="$OUTPUT_DIR/member_$i.txt"
-    CONSTRAINT="${ASSIGNED_CONSTRAINTS[$((i-1))]}"
-    echo ""
-    echo "───────────────────────────────────────────────────────────────"
-    echo "        MEMBER #$i ANALYSIS [${CONSTRAINT^^} CONSTRAINT]"
-    echo "───────────────────────────────────────────────────────────────"
-    echo ""
-    if [ -f "$OUTPUT_FILE" ]; then
-        cat "$OUTPUT_FILE"
-    else
-        echo "[No output captured]"
-    fi
-    echo ""
-done
+    for i in $(seq 1 $NUM_CLAUDES); do
+        OUTPUT_FILE="$OUTPUT_DIR/member_$i.txt"
+        CONSTRAINT="${ASSIGNED_CONSTRAINTS[$((i-1))]}"
+        echo ""
+        echo "───────────────────────────────────────────────────────────────"
+        echo "        MEMBER #$i ANALYSIS [${CONSTRAINT^^} CONSTRAINT]"
+        echo "───────────────────────────────────────────────────────────────"
+        echo ""
+        if [ -f "$OUTPUT_FILE" ]; then
+            cat "$OUTPUT_FILE"
+        else
+            echo "[No output captured]"
+        fi
+        echo ""
+    done
 
-echo ""
-echo "═══════════════════════════════════════════════════════════════"
-echo "                       END OF REPORT"
-echo "═══════════════════════════════════════════════════════════════"
-echo ""
+    echo ""
+    echo "═══════════════════════════════════════════════════════════════"
+    echo "                       END OF REPORT"
+    echo "═══════════════════════════════════════════════════════════════"
+    echo ""
+else
+    # Synthesis mode - skip individual displays, go straight to synthesis
+    echo ""
+    echo "═══════════════════════════════════════════════════════════════"
+    echo "                    COUNCIL SYNTHESIS MODE"
+    echo "═══════════════════════════════════════════════════════════════"
+    echo ""
+    info "Generating consolidated synthesis from $NUM_CLAUDES council members..."
+    info "(Individual analyses available in temp directory until completion)"
+    echo ""
+fi
 
 # Optional synthesis step (enabled via --synthesize flag or COUNCIL_SYNTHESIZE=1)
 if [ "${COUNCIL_SYNTHESIZE:-0}" -eq 1 ]; then
