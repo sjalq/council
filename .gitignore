@@ -1,0 +1,16 @@
+# Temporary files
+*.txt
+*.log
+
+# Council output
+council_report_*.txt
+
+# System files
+.DS_Store
+*~
+
+# Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
