@@ -42,9 +42,21 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-# Default number of Claudes
-NUM_CLAUDES=${1:-5}
-TASK="${2:-}"
+# Smart argument parsing: detect if first arg is number or task
+if [[ $# -gt 0 ]]; then
+    # Check if first argument is a number
+    if [[ "$1" =~ ^[0-9]+$ ]]; then
+        NUM_CLAUDES="$1"
+        TASK="${2:-}"
+    else
+        # First argument is the task description
+        NUM_CLAUDES=5
+        TASK="$1"
+    fi
+else
+    NUM_CLAUDES=5
+    TASK=""
+fi
 
 # Validate inputs
 if [ -z "$TASK" ]; then
@@ -63,7 +75,7 @@ if [ -z "$TASK" ]; then
     echo "  - Shows synthesis only (use --all to see individual analyses)"
     echo ""
     echo "EXAMPLES:"
-    echo "  $0 \"Review auth module\"                      # 5 members: Goldratt + Musk + 3 random"
+    echo "  $0 \"Review auth module\"                      # 5 members (default)"
     echo "  $0 --all \"Review auth module\"                # 5 members, show all analyses"
     echo "  $0 3 \"Quick review\"                          # 3 members: Goldratt + Musk + 1 random"
     echo "  $0 --model haiku 8 \"Deep analysis\"           # 8 members with Haiku model"
@@ -258,10 +270,28 @@ KEY QUESTIONS: What are the actual physical constraints? Can I explain this to a
 PERSONA: Think like Elon Musk - first principles physics, delete ruthlessly, ship with urgency, iterate fast.
 
 KEY QUESTIONS: What can we delete entirely? What's the fastest path to shipping? Are we solving the right problem or optimizing the wrong thing? What would 10x this?"
+
+    [delete_muratori]="CONSTRAINT: Analyze ONLY by identifying what to DELETE entirely - abstractions, layers, dependencies, code. Ignore features and additions.
+
+PERSONA: Think like Casey Muratori (Handmade Hero) - most abstractions are HARMFUL. Compression-oriented programming: understand the problem domain so well you can delete the framework. The best code is NO code. Performance IS correctness.
+
+KEY QUESTIONS: What abstraction can we delete entirely? What dependency can we remove? What layer is pure overhead? What would this look like with ZERO frameworks? Can we replace 10,000 lines of library with 100 lines that do exactly what we need? How many CPU cycles from input to output?"
+
+    [crash_armstrong]="CONSTRAINT: Analyze ONLY isolation, supervision trees, and embracing failure. Ignore prevention and defensive programming.
+
+PERSONA: Think like Joe Armstrong (Erlang) - Let it crash. Build supervision, not defenses. Isolation > error handling. Most error handling code is waste—just restart the process. Immutability + message passing = simpler systems.
+
+KEY QUESTIONS: What should we let crash instead of handling? Where's our supervision hierarchy? Can we isolate this so failure doesn't propagate? Are we writing defensive code that should be restart logic? What happens if we DELETE all the try-catch blocks? Can we make this stateless so crashes don't matter?"
+
+    [data_acton]="CONSTRAINT: Analyze ONLY memory layout, cache behavior, and data transformation pipelines. Ignore object models and abstractions.
+
+PERSONA: Think like Mike Acton (Insomniac Games) - OOP is an expensive disaster. Structure code around memory access patterns, not abstractions. Data is all there is. The purpose of all programs is to transform data from one form to another.
+
+KEY QUESTIONS: What's the cache miss rate? Are we storing arrays of structs or structs of arrays? Does this data layout match CPU reality? Can we delete the object model entirely? Where does the data come from, where does it go, and what transformations happen? How much memory are we wasting on indirection?"
 )
 
 # Constraint keys for assignment (each guarantees orthogonal analysis)
-CONSTRAINT_KEYS=(complexity_knuth types_czaplicki errors_dijkstra scale_goldratt simplicity_hickey waste_ohno devex_spolsky tests_beck taste_torvalds pragmatic_carmack refactor_fowler firstprinciples_feynman urgency_musk)
+CONSTRAINT_KEYS=(complexity_knuth types_czaplicki errors_dijkstra scale_goldratt simplicity_hickey waste_ohno devex_spolsky tests_beck taste_torvalds pragmatic_carmack refactor_fowler firstprinciples_feynman urgency_musk delete_muratori crash_armstrong data_acton)
 
 # Create the enhanced prompt for each Claude with assigned constraint
 create_council_prompt() {
