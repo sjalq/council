@@ -2,8 +2,9 @@
 # Council - Spawn multiple Claude instances to analyze and provide suggestions
 # Based on telebot's monitor pattern
 #
-# Usage: ./council.sh [num_claudes] "task description"
+# Usage: ./council.sh [--model <model>] [num_claudes] "task description"
 # Example: ./council.sh 4 "Review the authentication module and suggest improvements"
+# Example: ./council.sh --model haiku 4 "Quick analysis of error handling"
 
 set -e
 
@@ -16,18 +17,56 @@ MAGENTA='\033[0;35m'
 CYAN='\033[0;36m'
 NC='\033[0m' # No Color
 
+# Parse flags
+MODEL=""
+USE_RANDOM=0
+SHOW_ALL=0
+
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --model)
+            MODEL="$2"
+            shift 2
+            ;;
+        --random)
+            USE_RANDOM=1
+            shift
+            ;;
+        --all)
+            SHOW_ALL=1
+            shift
+            ;;
+        *)
+            break
+            ;;
+    esac
+done
+
 # Default number of Claudes
-NUM_CLAUDES=${1:-4}
+NUM_CLAUDES=${1:-5}
 TASK="${2:-}"
 
 # Validate inputs
 if [ -z "$TASK" ]; then
     echo -e "${RED}Error: Task description required${NC}"
     echo ""
-    echo "Usage: $0 [num_claudes] \"task description\""
+    echo "Usage: $0 [OPTIONS] [num_claudes] \"task description\""
     echo ""
-    echo "Example:"
-    echo "  $0 4 \"Review the authentication module and suggest improvements\""
+    echo "OPTIONS:"
+    echo "  --model <model>    Model to use (sonnet, opus, haiku, or full model name)"
+    echo "  --all              Show all individual analyses (default: synthesis only)"
+    echo ""
+    echo "DEFAULT BEHAVIOR:"
+    echo "  - Default: 5 members (Goldratt + Musk + 3 random)"
+    echo "  - Always includes BOTH Goldratt (scale) AND Musk (urgency)"
+    echo "  - Remaining (N-2) members selected randomly from other constraints"
+    echo "  - Shows synthesis only (use --all to see individual analyses)"
+    echo ""
+    echo "EXAMPLES:"
+    echo "  $0 \"Review auth module\"                      # 5 members: Goldratt + Musk + 3 random"
+    echo "  $0 --all \"Review auth module\"                # 5 members, show all analyses"
+    echo "  $0 3 \"Quick review\"                          # 3 members: Goldratt + Musk + 1 random"
+    echo "  $0 --model haiku 8 \"Deep analysis\"           # 8 members with Haiku model"
     echo ""
     exit 1
 fi
@@ -127,6 +166,11 @@ echo -e "${GREEN}═════════════════════
 echo ""
 echo -e "  ${CYAN}Working Directory:${NC} $WORK_DIR"
 echo -e "  ${CYAN}Council Members:${NC} $NUM_CLAUDES"
+if [ -n "$MODEL" ]; then
+    echo -e "  ${CYAN}Model:${NC} $MODEL"
+else
+    echo -e "  ${CYAN}Model:${NC} Claude CLI default"
+fi
 echo -e "  ${CYAN}Task:${NC} $TASK"
 echo ""
 echo -e "${GREEN}═══════════════════════════════════════════════════════════════${NC}"
@@ -137,11 +181,11 @@ echo ""
 # Personas add flavor and specific questioning styles
 declare -A CONSTRAINT_PROMPTS
 CONSTRAINT_PROMPTS=(
-    [complexity_knuth]="CONSTRAINT: Analyze ONLY algorithmic complexity, time/space efficiency, and data structure choices. Ignore architecture, style, features.
+    [complexity_knuth]="CONSTRAINT: Analyze ONLY algorithmic complexity, data structure choices, and when optimization matters. Ignore architecture and style.
 
-PERSONA: Think like Donald Knuth - mathematical rigor, prove correctness, optimize for algorithmic elegance.
+PERSONA: Think like Donald Knuth - \"Premature optimization is the root of all evil.\" Focus on the critical 3% where performance matters, not the 97% that doesn't. Prove correctness first.
 
-KEY QUESTIONS: What's the time complexity? Can we prove this terminates? Is there a more fundamental algorithm? Are we using optimal data structures?"
+KEY QUESTIONS: What's the actual time/space complexity? Is this in the critical 3% that matters? Are we optimizing prematurely? What's the simplest correct algorithm first?"
 
     [types_czaplicki]="CONSTRAINT: Analyze ONLY type safety, API design, and preventing impossible states. Ignore implementation details and performance.
 
@@ -149,17 +193,17 @@ PERSONA: Think like Evan Czaplicki (Elm) - make impossible states impossible, de
 
 KEY QUESTIONS: What runtime failures could types prevent? Where can users misuse this API? How can we encode invariants in types?"
 
-    [errors_dijkstra]="CONSTRAINT: Analyze ONLY error handling, edge cases, failure modes, and correctness. Ignore happy paths and features.
+    [errors_dijkstra]="CONSTRAINT: Analyze ONLY correctness, formal verification, error handling, and invariants. Ignore performance and features.
 
-PERSONA: Think like Edsger Dijkstra - correctness by construction, debugging should be unnecessary.
+PERSONA: Think like Edsger Dijkstra - correctness by construction, not debugging into correctness. \"Program testing can show the presence of bugs, but never their absence.\" Prove it correct.
 
-KEY QUESTIONS: What happens when X fails? What invariants must hold? Can we prove this handles all cases? What edge cases are missed?"
+KEY QUESTIONS: What invariants must hold? Can we prove this is correct? What happens when X fails? How do we know this terminates? What can we eliminate to simplify proof?"
 
-    [scale_goldratt]="CONSTRAINT: Analyze ONLY scalability from 1 to 1M users, bottlenecks, and system constraints. Ignore current behavior.
+    [scale_goldratt]="CONSTRAINT: Analyze ONLY by identifying THE goal, THE constraint limiting it, and how to exploit/elevate that constraint. Ignore non-constraints.
 
-PERSONA: Think like Eliyahu Goldratt (Theory of Constraints) - find the ONE bottleneck limiting throughput.
+PERSONA: Think like Eliyahu Goldratt (Theory of Constraints) - What's THE GOAL? Find the ONE constraint limiting throughput. Any improvement not at the constraint is an illusion. Five Focusing Steps: 1) Identify 2) Exploit 3) Subordinate 4) Elevate 5) Repeat.
 
-KEY QUESTIONS: What breaks at 10x load? 100x? Where's the constraint? What optimizations don't address the bottleneck?"
+KEY QUESTIONS: What is THE GOAL here? What's the ONE constraint preventing us from achieving more of the goal? Are we wasting effort on non-constraints? How do we exploit the constraint? What should we subordinate to it?"
 
     [simplicity_hickey]="CONSTRAINT: Analyze ONLY complexity, complecting (intertwining), and separation of concerns. Ignore features and performance.
 
@@ -191,11 +235,11 @@ PERSONA: Think like Linus Torvalds - good taste is knowing what to leave out. Ba
 
 KEY QUESTIONS: Does this have taste? Is this needlessly complex? What should we delete? Would I be embarrassed to show this?"
 
-    [pragmatic_carmack]="CONSTRAINT: Analyze ONLY shipping readiness, premature abstraction, and pragmatic trade-offs. Ignore theoretical perfection.
+    [pragmatic_carmack]="CONSTRAINT: Analyze ONLY shipping readiness, state management, and pragmatic functional approaches. Ignore theoretical purity.
 
-PERSONA: Think like John Carmack - elegant code that ships. Beware premature abstraction.
+PERSONA: Think like John Carmack - move toward functional purity to reduce state bugs, but ship pragmatically. \"The real enemy is unexpected mutation of state.\" Pure functions are easier to reason about.
 
-KEY QUESTIONS: Will this actually ship? Is this abstraction premature? What's the pragmatic path that doesn't sacrifice quality?"
+KEY QUESTIONS: Will this actually ship? What state is being mutated unexpectedly? Can we make this function purer without killing performance? Is this abstraction premature or does it reduce state complexity?"
 
     [refactor_fowler]="CONSTRAINT: Analyze ONLY code smells, refactoring opportunities, and pattern applications. Ignore new features.
 
@@ -208,17 +252,16 @@ KEY QUESTIONS: What's the code smell? Which refactoring applies? What's the simp
 PERSONA: Think like Richard Feynman - break down to fundamentals, explain simply or you don't understand it.
 
 KEY QUESTIONS: What are the actual physical constraints? Can I explain this to a child? What am I pretending to understand? What's physics vs convention?"
+
+    [urgency_musk]="CONSTRAINT: Analyze ONLY what enables 10x faster iteration, deletion opportunities, and shipping urgency. Ignore perfection and process.
+
+PERSONA: Think like Elon Musk - first principles physics, delete ruthlessly, ship with urgency, iterate fast.
+
+KEY QUESTIONS: What can we delete entirely? What's the fastest path to shipping? Are we solving the right problem or optimizing the wrong thing? What would 10x this?"
 )
 
 # Constraint keys for assignment (each guarantees orthogonal analysis)
-CONSTRAINT_KEYS=(complexity_knuth types_czaplicki errors_dijkstra scale_goldratt simplicity_hickey waste_ohno devex_spolsky tests_beck taste_torvalds pragmatic_carmack refactor_fowler firstprinciples_feynman)
-
-# Randomly assign unique constraints to council members
-assign_constraints() {
-    local num_needed=$1
-    # Shuffle constraint keys and take first N (ensures no duplicates)
-    printf '%s\n' "${CONSTRAINT_KEYS[@]}" | shuf | head -n "$num_needed"
-}
+CONSTRAINT_KEYS=(complexity_knuth types_czaplicki errors_dijkstra scale_goldratt simplicity_hickey waste_ohno devex_spolsky tests_beck taste_torvalds pragmatic_carmack refactor_fowler firstprinciples_feynman urgency_musk)
 
 # Create the enhanced prompt for each Claude with assigned constraint
 create_council_prompt() {
@@ -273,12 +316,40 @@ EOF
 
 # Assign unique constraints to each council member
 info "Assigning analysis constraints to council members..."
-ASSIGNED_CONSTRAINTS=($(assign_constraints $NUM_CLAUDES))
+
+# Always include BOTH Goldratt AND Musk
+MANDATORY_CONSTRAINTS=("scale_goldratt" "urgency_musk")
+
+if [ "$NUM_CLAUDES" -eq 1 ]; then
+    # If only 1 claude requested, pick one of the mandatory constraints randomly
+    ASSIGNED_CONSTRAINTS=("${MANDATORY_CONSTRAINTS[$RANDOM % ${#MANDATORY_CONSTRAINTS[@]}]}")
+    info "(Using 1 mandatory constraint: ${ASSIGNED_CONSTRAINTS[0]^^})"
+elif [ "$NUM_CLAUDES" -eq 2 ]; then
+    # If 2 claudes requested, use both mandatory constraints
+    ASSIGNED_CONSTRAINTS=("${MANDATORY_CONSTRAINTS[@]}")
+    info "(Using both mandatory constraints: GOLDRATT + MUSK)"
+else
+    # Pick remaining N-2 constraints randomly from others (excluding both mandatory ones)
+    REMAINING_COUNT=$((NUM_CLAUDES - 2))
+
+    # Get all constraints except the two mandatory ones
+    OTHER_CONSTRAINTS=($(printf '%s\n' "${CONSTRAINT_KEYS[@]}" | grep -v "^scale_goldratt$" | grep -v "^urgency_musk$" | shuf | head -n "$REMAINING_COUNT"))
+
+    # Combine: both mandatory + random others
+    ASSIGNED_CONSTRAINTS=("${MANDATORY_CONSTRAINTS[@]}" "${OTHER_CONSTRAINTS[@]}")
+
+    info "(Mandatory: GOLDRATT + MUSK + ${REMAINING_COUNT} random)"
+fi
 
 # Display assignments
 for i in $(seq 0 $((NUM_CLAUDES-1))); do
     CONSTRAINT="${ASSIGNED_CONSTRAINTS[$i]}"
-    info "  Member #$((i+1)): ${CONSTRAINT^^}"
+    # Mark the mandatory constraints
+    if [ "$CONSTRAINT" = "scale_goldratt" ] || [ "$CONSTRAINT" = "urgency_musk" ]; then
+        info "  Member #$((i+1)): ${CONSTRAINT^^} (mandatory)"
+    else
+        info "  Member #$((i+1)): ${CONSTRAINT^^}"
+    fi
 done
 echo ""
 
@@ -301,12 +372,13 @@ for i in $(seq 1 $NUM_CLAUDES); do
     # Simplified pipeline to avoid pipe buffer exhaustion and stdout contention
     # Using head to limit output to 100K lines as safety measure
     (
-        claude \
-            -p "$PROMPT" \
-            --model "claude-sonnet-4-5-20250929" \
-            --dangerously-skip-permissions \
-            --output-format "text" \
-            2>&1 | head -n 100000 > "$OUTPUT_FILE"
+        # Build claude command with optional model flag
+        CLAUDE_CMD=(claude -p "$PROMPT" --dangerously-skip-permissions --output-format "text")
+        if [ -n "$MODEL" ]; then
+            CLAUDE_CMD+=(--model "$MODEL")
+        fi
+
+        "${CLAUDE_CMD[@]}" 2>&1 | head -n 100000 > "$OUTPUT_FILE"
 
         # Log completion to stdout without blocking pipes
         echo -e "${COLOR}[Member #$i ($CONSTRAINT) completed]${NC}"
@@ -420,12 +492,12 @@ echo -e "${GREEN}═════════════════════
 echo ""
 
 # Generate and output aggregate report
-# If synthesis enabled, skip individual reports and only show synthesis
-# If synthesis disabled, show all individual reports
-if [ "${COUNCIL_SYNTHESIZE:-0}" -eq 0 ]; then
+# If --all flag is set, show individual analyses
+# Otherwise (default), skip to synthesis only
+if [ "$SHOW_ALL" -eq 1 ]; then
     echo ""
     echo "═══════════════════════════════════════════════════════════════"
-    echo "                    COUNCIL ANALYSIS REPORT"
+    echo "                 INDIVIDUAL COUNCIL ANALYSES"
     echo "═══════════════════════════════════════════════════════════════"
     echo ""
     echo "Task: $TASK"
@@ -454,39 +526,29 @@ if [ "${COUNCIL_SYNTHESIZE:-0}" -eq 0 ]; then
 
     echo ""
     echo "═══════════════════════════════════════════════════════════════"
-    echo "                       END OF REPORT"
+    echo "                  END OF INDIVIDUAL ANALYSES"
     echo "═══════════════════════════════════════════════════════════════"
-    echo ""
-else
-    # Synthesis mode - skip individual displays, go straight to synthesis
-    echo ""
-    echo "═══════════════════════════════════════════════════════════════"
-    echo "                    COUNCIL SYNTHESIS MODE"
-    echo "═══════════════════════════════════════════════════════════════"
-    echo ""
-    info "Generating consolidated synthesis from $NUM_CLAUDES council members..."
-    info "(Individual analyses available in temp directory until completion)"
     echo ""
 fi
 
-# Optional synthesis step (enabled via --synthesize flag or COUNCIL_SYNTHESIZE=1)
-if [ "${COUNCIL_SYNTHESIZE:-0}" -eq 1 ]; then
-    echo ""
-    echo "═══════════════════════════════════════════════════════════════"
-    echo "                    SYNTHESIS & RECOMMENDATIONS"
-    echo "═══════════════════════════════════════════════════════════════"
-    echo ""
+# Synthesis (default behavior - always run)
+# Note: Even with --all, we show synthesis after individual analyses
+echo ""
+echo "═══════════════════════════════════════════════════════════════"
+echo "                    SYNTHESIS & RECOMMENDATIONS"
+echo "═══════════════════════════════════════════════════════════════"
+echo ""
 
-    info "Synthesizing insights from all $NUM_CLAUDES council members..."
-    echo ""
+info "Synthesizing insights from all $NUM_CLAUDES council members..."
+echo ""
 
-    # Collect all member outputs
-    ALL_ANALYSES=""
-    for i in $(seq 1 $NUM_CLAUDES); do
-        OUTPUT_FILE="$OUTPUT_DIR/member_$i.txt"
-        CONSTRAINT="${ASSIGNED_CONSTRAINTS[$((i-1))]}"
-        if [ -f "$OUTPUT_FILE" ]; then
-            ALL_ANALYSES="$ALL_ANALYSES
+# Collect all member outputs
+ALL_ANALYSES=""
+for i in $(seq 1 $NUM_CLAUDES); do
+    OUTPUT_FILE="$OUTPUT_DIR/member_$i.txt"
+    CONSTRAINT="${ASSIGNED_CONSTRAINTS[$((i-1))]}"
+    if [ -f "$OUTPUT_FILE" ]; then
+        ALL_ANALYSES="$ALL_ANALYSES
 
 ═══════════════════════════════════════════════════════════════
 MEMBER #$i: ${CONSTRAINT^^}
@@ -494,11 +556,11 @@ MEMBER #$i: ${CONSTRAINT^^}
 
 $(cat "$OUTPUT_FILE")
 "
-        fi
-    done
+    fi
+done
 
-    # Create synthesis prompt
-    SYNTHESIS_PROMPT="You are a master synthesizer analyzing insights from $NUM_CLAUDES council members who each analyzed through different constraints.
+# Create synthesis prompt
+SYNTHESIS_PROMPT="You are a master synthesizer analyzing insights from $NUM_CLAUDES council members who each analyzed through different constraints.
 
 YOUR TASK:
 Synthesize the following analyses into ONE coherent, actionable recommendation.
@@ -541,21 +603,21 @@ Focus on ACTIONABLE recommendations with clear next steps.
 
 Begin your synthesis now."
 
-    # Run synthesis
-    SYNTHESIS_OUTPUT=$(claude \
-        -p "$SYNTHESIS_PROMPT" \
-        --model "claude-sonnet-4-5-20250929" \
-        --dangerously-skip-permissions \
-        --output-format "text" \
-        2>&1)
-
-    echo "$SYNTHESIS_OUTPUT"
-    echo ""
-    echo "═══════════════════════════════════════════════════════════════"
-    echo "                    END OF SYNTHESIS"
-    echo "═══════════════════════════════════════════════════════════════"
-    echo ""
+# Run synthesis
+# Build claude command with optional model flag
+SYNTHESIS_CMD=(claude -p "$SYNTHESIS_PROMPT" --dangerously-skip-permissions --output-format "text")
+if [ -n "$MODEL" ]; then
+    SYNTHESIS_CMD+=(--model "$MODEL")
 fi
+
+SYNTHESIS_OUTPUT=$("${SYNTHESIS_CMD[@]}" 2>&1)
+
+echo "$SYNTHESIS_OUTPUT"
+echo ""
+echo "═══════════════════════════════════════════════════════════════"
+echo "                    END OF SYNTHESIS"
+echo "═══════════════════════════════════════════════════════════════"
+echo ""
 
 # Clean up temp files now that we're done
 rm -rf "$TEMP_DIR" 2>/dev/null || true
