@@ -36,6 +36,39 @@ while [[ $# -gt 0 ]]; do
             SHOW_ALL=1
             shift
             ;;
+        --install)
+            # Global installation
+            INSTALL_DIR="/usr/local/bin"
+            SCRIPT_NAME="council"
+
+            # Get the actual path of this script (resolve symlinks)
+            SOURCE="${BASH_SOURCE[0]}"
+            while [ -h "$SOURCE" ]; do
+                DIR="$( cd -P "$( dirname "$SOURCE" )" && pwd )"
+                SOURCE="$(readlink "$SOURCE")"
+                [[ $SOURCE != /* ]] && SOURCE="$DIR/$SOURCE"
+            done
+            SCRIPT_PATH="$( cd -P "$( dirname "$SOURCE" )" && pwd )/$(basename "$SOURCE")"
+
+            echo "Installing council to $INSTALL_DIR/$SCRIPT_NAME..."
+
+            # Check if we can write to install dir
+            if [ -w "$INSTALL_DIR" ]; then
+                cp "$SCRIPT_PATH" "$INSTALL_DIR/$SCRIPT_NAME"
+                chmod +x "$INSTALL_DIR/$SCRIPT_NAME"
+                echo "Successfully installed council to $INSTALL_DIR/$SCRIPT_NAME"
+            else
+                # Need sudo
+                echo "Requires sudo to install to $INSTALL_DIR"
+                sudo cp "$SCRIPT_PATH" "$INSTALL_DIR/$SCRIPT_NAME"
+                sudo chmod +x "$INSTALL_DIR/$SCRIPT_NAME"
+                echo "Successfully installed council to $INSTALL_DIR/$SCRIPT_NAME"
+            fi
+
+            echo ""
+            echo "You can now run 'council' from anywhere."
+            exit 0
+            ;;
         *)
             break
             ;;
@@ -67,6 +100,7 @@ if [ -z "$TASK" ]; then
     echo "OPTIONS:"
     echo "  --model <model>    Model to use (sonnet, opus, haiku, or full model name)"
     echo "  --all              Show all individual analyses (default: synthesis only)"
+    echo "  --install          Install council globally to /usr/local/bin"
     echo ""
     echo "DEFAULT BEHAVIOR:"
     echo "  - Default: 5 members (Goldratt + Musk + 3 random)"
