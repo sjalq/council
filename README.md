@@ -71,6 +71,17 @@ Single-agent analysis produces generic results. Multiple agents with the same pr
 - ✅ **Automatic cleanup**: Temp files removed after completion
 - ✅ **Timeout protection**: 30-minute default (configurable via `COUNCIL_TIMEOUT`)
 
+## Claude Code Integration
+
+Add the following to your `~/.claude/CLAUDE.md` file to enable seamless Claude Code integration:
+
+```markdown
+- COUNCIL: When asked to "ask/consult/check with the council", run: `council "your question"` in the background using the Bash tool with `run_in_background: true`. Multi-agent code analysis (default 5 members: Goldratt + Musk + 3 random experts with orthogonal constraints). Optionally specify member count: `council 7 "question"`. Add `--model haiku` for speed, `--all` to see individual analyses before synthesis.
+  - IMPORTANT: To avoid overloading context, check output sparingly: sleep 120 seconds between checks using BashOutput. After checking, if still running, sleep another 120 seconds before the next check. Prefer to let the council finish in the background while continuing to interact with the user on other tasks rather than polling frequently.
+```
+
+This allows you to invoke the council naturally during Claude Code sessions with phrases like "ask the council about this architecture" or "consult the council on this design decision".
+
 ## Requirements
 
 - Claude Code CLI installed
