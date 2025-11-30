@@ -23,7 +23,7 @@ const MAX_OUTPUT_BYTES: usize = 500_000; // 500KB per member
 #[command(about = "Spawn multiple Claude instances to analyze with orthogonal constraints")]
 struct Args {
     /// Task description for the council to analyze
-    task: String,
+    task: Option<String>,
 
     /// Number of council members (default: 5)
     #[arg(short = 'n', long, default_value_t = 5)]
@@ -45,7 +45,7 @@ struct Args {
     #[arg(long)]
     all: bool,
 
-    /// Install council globally to /usr/local/bin
+    /// Install council globally to ~/.cargo/bin
     #[arg(long)]
     install: bool,
 }
@@ -70,43 +70,37 @@ fn install_globally() -> Result<(), Box<dyn std::error::Error>> {
             .ok_or("Cannot find council.rs source file")?
     };
 
-    let install_path = std::path::Path::new("/usr/local/bin/council");
+    // Install to ~/.cargo/bin (where cargo install puts things)
+    let home = std::env::var("HOME").or_else(|_| std::env::var("USERPROFILE"))?;
+    let cargo_bin = std::path::PathBuf::from(home).join(".cargo").join("bin");
+
+    // Create ~/.cargo/bin if it doesn't exist
+    std::fs::create_dir_all(&cargo_bin)?;
+
+    let install_path = cargo_bin.join("council");
 
     println!("{}", "Installing council...".green());
     println!("  Source: {}", script_path.display());
     println!("  Target: {}", install_path.display());
 
-    // Check if we need sudo
-    let install_dir = install_path.parent().unwrap();
-    let needs_sudo = !install_dir.metadata()
-        .map(|m| m.permissions().mode() & 0o200 != 0)
-        .unwrap_or(false);
+    // Copy the file
+    std::fs::copy(&script_path, &install_path)?;
 
-    if needs_sudo {
-        println!("{}", "Requires sudo...".yellow());
-        let status = std::process::Command::new("sudo")
-            .args(["cp", &script_path.to_string_lossy(), "/usr/local/bin/council"])
-            .status()?;
-
-        if !status.success() {
-            return Err("Failed to copy with sudo".into());
-        }
-
-        std::process::Command::new("sudo")
-            .args(["chmod", "+x", "/usr/local/bin/council"])
-            .status()?;
-    } else {
-        std::fs::copy(&script_path, install_path)?;
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            std::fs::set_permissions(install_path, std::fs::Permissions::from_mode(0o755))?;
-        }
+    // Make it executable (Unix only)
+    #[cfg(unix)]
+    {
+        std::fs::set_permissions(&install_path, std::fs::Permissions::from_mode(0o755))?;
     }
 
     println!();
     println!("{}", "Successfully installed!".green().bold());
+    println!();
     println!("Run: {} \"your task\"", "council".cyan());
+    println!();
+    println!("{}", "Note:".yellow());
+    println!("  Make sure ~/.cargo/bin is in your PATH");
+    println!("  If 'council' is not found, add this to your ~/.bashrc or ~/.zshrc:");
+    println!("    export PATH=\"$HOME/.cargo/bin:$PATH\"");
 
     Ok(())
 }
@@ -423,6 +417,20 @@ async fn main() {
         }
     }
 
+    // Ensure task was provided
+    let task = match args.task {
+        Some(t) => t,
+        None => {
+            eprintln!("{}", "Error: <TASK> argument is required".red().bold());
+            eprintln!();
+            eprintln!("Usage: council [OPTIONS] <TASK>");
+            eprintln!("       council --install");
+            eprintln!();
+            eprintln!("For more information try '--help'");
+            std::process::exit(1);
+        }
+    };
+
     // Validate Claude CLI exists before spawning N processes
     let claude_check = std::process::Command::new("which")
         .arg("claude")
@@ -451,7 +459,7 @@ async fn main() {
         println!("  {}: {}", "Model".cyan(), m);
     }
     println!("  {}: {}", "Synthesize".cyan(), if args.no_synthesize { "no" } else { "yes" });
-    println!("  {}: {}", "Task".cyan(), &args.task[..args.task.len().min(50)]);
+    println!("  {}: {}", "Task".cyan(), &task[..task.len().min(50)]);
     println!();
 
     // Show constraint assignments
@@ -474,7 +482,7 @@ async fn main() {
     // Spawn all council members
     for (i, constraint) in constraints.iter().enumerate() {
         let tx = tx.clone();
-        let prompt = create_prompt(constraint, &args.task, num_members);
+        let prompt = create_prompt(constraint, &task, num_members);
         let name = constraint.name.to_string();
         let timeout = args.timeout;
         let model = args.model.clone();
@@ -534,7 +542,7 @@ async fn main() {
         println!("{}", "=".repeat(60).magenta());
         println!();
 
-        let synthesis_prompt = create_synthesis_prompt(&outputs, &args.task);
+        let synthesis_prompt = create_synthesis_prompt(&outputs, &task);
         let synthesis_result = run_claude(&synthesis_prompt, args.timeout, args.model.as_deref()).await;
 
         println!();
